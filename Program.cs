@@ -1,6 +1,7 @@
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Ganss.Xss;
+using HtmlAgilityPack;
 using HtmlBuilders;
 using LiteDB;
 using Markdig;
@@ -134,6 +135,12 @@ app.MapGet("/{pageName}", (string pageName, HttpContext context, Wiki wiki, Rend
         atSidePanel: () => AllPagesForEditing(wiki)).ToString(), HtmlMime);
     }
 });
+// Search for pages
+app.MapGet("/search", (string query, Wiki wiki, Render render) =>
+{
+    var results = wiki.SearchPages(query);
+    return Results.Text(render.BuildSearchPage(query, results).ToString(), HtmlMime);
+});
 
 // Delete a page
 app.MapPost("/delete-page", async (HttpContext context, IAntiforgery antiForgery, Wiki wiki) =>
@@ -265,8 +272,34 @@ static string[] AllPagesForEditing(Wiki wiki)
 static string RenderMarkdown(string str)
 {
     var sanitizer = new HtmlSanitizer();
-    return sanitizer.Sanitize(Markdown.ToHtml(str, new MarkdownPipelineBuilder().UseSoftlineBreakAsHardlineBreak().UseAdvancedExtensions().Build()));
+    sanitizer.AllowedTags.Add("img");
+    sanitizer.AllowedAttributes.Add("src");
+    sanitizer.AllowedAttributes.Add("alt");
+
+    var markdownPipeline = new MarkdownPipelineBuilder()
+        .UseSoftlineBreakAsHardlineBreak()
+        .UseAdvancedExtensions()
+        .Build();
+
+    var html = Markdown.ToHtml(str, markdownPipeline);
+
+    // Extract image URLs for display
+    var doc = new HtmlDocument();
+    doc.LoadHtml(html);
+    var images = doc.DocumentNode.SelectNodes("//img");
+    if (images != null)
+    {
+        foreach (var img in images)
+        {
+            var url = img.GetAttributeValue("src", "");
+            // Optionally, you can add custom styling or a container for the URL
+            var urlText = $"<p>Image URL: <a href=\"{url}\" target=\"_blank\">{url}</a></p>";
+            html = html.Replace(img.OuterHtml, img.OuterHtml + urlText);
+        }
+    }
+    return sanitizer.Sanitize(html);
 }
+
 
 static string RenderPageContent(Page page) => RenderMarkdown(page.Content);
 
@@ -439,80 +472,201 @@ class Render
           element.select();
           document.execCommand(""copy"");
         }
+
+        
         </script>"
     };
 
     (Template head, Template body, Template layout) _templates = (
-      head: Scriban.Template.Parse(
-        """
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>{{ title }}</title>
-          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.19.4/dist/css/uikit.min.css" />
-          {{ header }}
-          <style>
-            .last-modified { font-size: small; }
-            a:visited { color: blue; }
-            a:link { color: red; }
-          </style>
-          """),
-      body: Scriban.Template.Parse("""
-                <nav class="uk-navbar-container">
-                  <div class="uk-container">
-                    <div class="uk-navbar">
-                      <div class="uk-navbar-left">
-                        <ul class="uk-navbar-nav">
-                          <li class="uk-active"><a href="/"><span uk-icon="home"></span></a></li>
-                        </ul>
-                      </div>
-                      <div class="uk-navbar-center">
-                        <div class="uk-navbar-item">
-                          <form action="/new-page">
-                            <input class="uk-input uk-form-width-large" type="text" name="pageName" placeholder="Type desired page title here"></input>
-                            <input type="submit"  class="uk-button uk-button-default" value="Add New Page">
-                          </form>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </nav>
-                {{ if at_side_panel != "" }}
-                  <div class="uk-container">
-                  <div uk-grid>
-                    <div class="uk-width-4-5">
-                      <h1>{{ page_name }}</h1>
-                      {{ content }}
-                    </div>
-                    <div class="uk-width-1-5">
-                      {{ at_side_panel }}
-                    </div>
-                  </div>
-                  </div>
-                {{ else }}
-                  <div class="uk-container">
-                    <h1>{{ page_name }}</h1>
-                    {{ content }}
-                  </div>
-                {{ end }}
-                      
-                <script src="https://cdn.jsdelivr.net/npm/uikit@3.19.4/dist/js/uikit.min.js"></script>
-                <script src="https://cdn.jsdelivr.net/npm/uikit@3.19.4/dist/js/uikit-icons.min.js"></script>
-                {{ at_foot }}
-                
-          """),
-      layout: Scriban.Template.Parse("""
-                <!DOCTYPE html>
-                  <head>
-                    {{ head }}
-                  </head>
-                  <body>
-                    {{ body }}
-                  </body>
-                </html>
-          """)
-    );
+     head: Scriban.Template.Parse(
+    """
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.19.4/dist/css/uikit.min.css" />
+    {{ header }}
+       <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0; /* Light gray background for the whole page */
+        }
+        .navbar {
+            background-color: #003366; /* Dark blue background */
+            overflow: hidden;
+        }
+        .navbar a {
+            float: left;
+            display: block;
+            color: white;
+            text-align: center;
+            padding: 14px 20px;
+            text-decoration: none;
+        }
+        .navbar a:hover {
+            background-color: #00509e; /* Lighter blue on hover */
+            color: white;
+        }
+        .container {
+            width: 80%;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .footer {
+            background-color: #003366; /* Dark blue background */
+            color: white;
+            text-align: center;
+            padding: 10px 0;
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+        }
+        .btn {
+            background-color: #003366; /* Dark blue button */
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 8px;
+        }
+        .btn:hover {
+            background-color: #00509e; /* Lighter blue on hover */
+        }
+        .table-container {
+            background-color: #ffffff; /* White background for table container */
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); /* Light shadow for better visibility */
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            color: white; /* White text color */
+        }
+        table, th, td {
+            border: 1px solid #ddd; /* Light gray border */
+            
+        }
+        th, td {
+            padding: 15px;
+            text-align: left;
+            color: blue;
+            
+        }
+        th {
+            background-color: #003366; /* Dark blue header */
+            color: white;
+            
+        }
+     h1 {
+        color: white; /* White color for <h1> text */
+    }
+        .last-modified { 
+            font-size: small; 
+        }
+        a:visited { 
+            color: #003366; /* Dark blue for visited links */
+        }
+        a:link { 
+            color: #00509e; /* Lighter blue for unvisited links */
+        }
+        
+        .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+    }
 
-    // Use only when the page requires editor
+    </style>
+    """),
+    body: Scriban.Template.Parse("""
+      <div class="navbar">
+        <form action="/new-page" style="float: left; margin: 10px;">
+            <label for="pageName" class="visually-hidden">Page Title</label>
+            <input type="text" id="pageName" name="pageName" placeholder="Type desired page title here">
+            <input type="submit" class="btn" value="Add New Page">
+        </form>
+        <form action="/search" style="float: right; margin: 10px;">
+            <label for="query" class="visually-hidden">Search</label>
+            <input type="text" id="query" name="query" placeholder="Search...">
+            <input type="submit" class="btn" value="Search">
+        </form>
+    </div>
+    
+    <!-- Main Content Section -->
+    <div class="container">
+        <div class="table-container">
+            <table>
+                <tr>
+                    <th colspan="{{ if at_side_panel != "" }}2{{ else }}1{{ end }}">
+                        <h1>{{ page_name }}</h1>
+                    </th>
+                </tr>
+                <tr>
+                    <td>
+                        {{ content }}
+                    </td>
+                    {{ if at_side_panel != "" }}
+                    <td style="width: 30%;">
+                        {{ at_side_panel }}
+                    </td>
+                    {{ end }}
+                </tr>
+            </table>
+        </div>
+    </div>
+        <!-- Footer Section -->
+    <div class="footer">
+        <p>&copy; {{ current_year }} Wiki. All rights reserved. Mayar Menessy</p>
+    </div>
+        {{ at_foot }}
+    """),
+    layout: Scriban.Template.Parse("""
+        <!DOCTYPE html>
+        <html lang="en">
+            <head>
+                {{ head }}
+            </head>
+            <body>
+                {{ body }}
+            </body>
+        </html>
+    """)
+);
+    public HtmlString BuildSearchPage(string query, List<Page> results)
+    {
+        string RenderSearchResults()
+        {
+            if (results.Count == 0)
+            {
+                return Div.Class("uk-alert uk-alert-warning").Append($"No results found for '{query}'").ToHtmlString();
+            }
+
+            var list = Ul.Class("uk-list uk-list-divider");
+            foreach (var page in results)
+            {
+                list = list.Append(Li.Append(A.Href($"/{page.Name}").Append(page.Name)));
+            }
+            return list.ToHtmlString();
+        }
+
+        return BuildPage("Search Results",
+            atBody: () => new[]
+            {
+            H1.Append($"Search Results for '{query}'").ToHtmlString(),
+            RenderSearchResults()
+            });
+    }
     public HtmlString BuildEditorPage(string title, Func<IEnumerable<string>> atBody, Func<IEnumerable<string>>? atSidePanel = null) =>
       BuildPage(
         title,
@@ -521,8 +675,6 @@ class Render
         atSidePanel: atSidePanel,
         atFoot: () => MarkdownEditorFoot()
         );
-
-    // General page layout building function
     public HtmlString BuildPage(string title, Func<IEnumerable<string>>? atHead = null, Func<IEnumerable<string>>? atBody = null, Func<IEnumerable<string>>? atSidePanel = null, Func<IEnumerable<string>>? atFoot = null)
     {
         var head = _templates.head.Render(new
@@ -542,7 +694,6 @@ class Render
         return new HtmlString(_templates.layout.Render(new { head, body }));
     }
 }
-
 class Wiki
 {
     DateTime Timestamp() => DateTime.UtcNow;
@@ -742,6 +893,19 @@ class Wiki
             return (false, ex);
         }
     }
+    public List<Page> SearchPages(string query)
+    {
+        using var db = new LiteDatabase(GetDbPath());
+        var coll = db.GetCollection<Page>(PageCollectionName);
+        coll.EnsureIndex(x => x.Name);
+
+        // Search pages by name or content containing the query
+        var results = coll.Query()
+                          .Where(x => x.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                                      x.Content.Contains(query, StringComparison.OrdinalIgnoreCase))
+                          .ToList();
+        return results;
+    }
 
     // Return null if file cannot be found.
     public (LiteFileInfo<string> meta, byte[] file)? GetFile(string fileId)
@@ -798,7 +962,7 @@ record PageInput(int? Id, string Name, string Content, IFormFile? Attachment)
         return new PageInput(pageId, name!, content!, file);
     }
 }
-
+//
 class PageInputValidator : AbstractValidator<PageInput>
 {
     public PageInputValidator(string pageName, string homePageName)
