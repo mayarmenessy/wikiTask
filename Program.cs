@@ -488,10 +488,10 @@ class Render
        <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #f0f0f0; /* Light gray background for the whole page */
+            background-color: #f0f0f0; 
         }
         .navbar {
-            background-color: #003366; /* Dark blue background */
+            background-color: #003366; 
             overflow: hidden;
         }
         .navbar a {
@@ -503,7 +503,7 @@ class Render
             text-decoration: none;
         }
         .navbar a:hover {
-            background-color: #00509e; /* Lighter blue on hover */
+            background-color: #00509e; 
             color: white;
         }
         .container {
@@ -512,7 +512,7 @@ class Render
             padding: 20px;
         }
         .footer {
-            background-color: #003366; /* Dark blue background */
+            background-color: #003366; 
             color: white;
             text-align: center;
             padding: 10px 0;
@@ -522,7 +522,7 @@ class Render
             width: 100%;
         }
         .btn {
-            background-color: #003366; /* Dark blue button */
+            background-color: #003366; 
             border: none;
             color: white;
             padding: 10px 20px;
@@ -535,21 +535,21 @@ class Render
             border-radius: 8px;
         }
         .btn:hover {
-            background-color: #00509e; /* Lighter blue on hover */
+            background-color: #00509e; 
         }
         .table-container {
-            background-color: #ffffff; /* White background for table container */
+            background-color: #ffffff;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); /* Light shadow for better visibility */
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            color: white; /* White text color */
+            color: white; 
         }
         table, th, td {
-            border: 1px solid #ddd; /* Light gray border */
+            border: 1px solid #ddd; 
             
         }
         th, td {
@@ -559,21 +559,21 @@ class Render
             
         }
         th {
-            background-color: #003366; /* Dark blue header */
+            background-color: #003366; 
             color: white;
             
         }
      h1 {
-        color: white; /* White color for <h1> text */
+        color: white; 
     }
         .last-modified { 
             font-size: small; 
         }
         a:visited { 
-            color: #003366; /* Dark blue for visited links */
+            color: #003366;
         }
         a:link { 
-            color: #00509e; /* Lighter blue for unvisited links */
+            color: #00509e; 
         }
         
         .visually-hidden {
@@ -716,7 +716,7 @@ class Wiki
     // Get the location of the LiteDB file.
     string GetDbPath() => Path.Combine(_env.ContentRootPath, "wiki.db");
 
-    // List all the available wiki pages. It is cached for 30 minutes.
+    // 
     public List<Page> ListAllPages()
     {
         var pages = _cache.Get(AllPagesKey) as List<Page>;
